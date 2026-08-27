@@ -1,0 +1,19 @@
+[project]
+name = "translator"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Jeffrey Li", email = "jeffrey.li@ericsson.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "deep-translator>=1.11.4",
+]
+
+[project.scripts]
+translator = "translator:main"
+
+[build-system]
+requires = ["uv_build>=0.12.2,<0.13.0"]
+build-backend = "uv_build"
