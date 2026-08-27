@@ -27,6 +27,13 @@ import html
 import os
 import sys
 
+# Force UTF-8 output on Windows to avoid encoding errors with CJK characters.
+if sys.platform == "win32":
+    # Reconfigure stdout to use UTF-8 encoding.
+    # This fixes "UnicodeEncodeError: 'charmap' codec can't encode characters"
+    # when GoldenDict runs the script on Windows.
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 from deep_translator import GoogleTranslator
 
 
