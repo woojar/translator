@@ -15,6 +15,10 @@ Behaviour:
   * Anything else is translated to Chinese (Simplified).
 Override the languages with the GD_SRC / GD_TGT environment variables
 (use "auto" for automatic source detection).
+
+Network requests honour a proxy when configured: GD_PROXY (applied to both
+http and https) takes precedence, otherwise the standard HTTP_PROXY /
+HTTPS_PROXY variables are used.
 """
 
 from __future__ import annotations
@@ -34,6 +38,30 @@ def _contains_cjk(text: str) -> bool:
         or "\uf900" <= ch <= "\ufaff"  # CJK Compatibility Ideographs
         for ch in text
     )
+
+
+def _pick_proxies() -> dict[str, str] | None:
+    """Build a requests-style proxies dict from the environment.
+
+    ``GD_PROXY`` overrides both protocols. Otherwise the standard
+    ``HTTP_PROXY`` / ``HTTPS_PROXY`` variables (upper or lower case) are
+    used. Returns ``None`` when no proxy is configured.
+    """
+    override = os.environ.get("GD_PROXY")
+    if override:
+        return {"http": override, "https": override}
+
+    http = os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy")
+    https = os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy")
+    if not http and not https:
+        return None
+
+    proxies: dict[str, str] = {}
+    if http:
+        proxies["http"] = http
+    if https:
+        proxies["https"] = https
+    return proxies
 
 
 def _pick_languages(text: str) -> tuple[str, str]:
@@ -68,8 +96,11 @@ def translate(word: str) -> str:
         return ""
 
     source, target = _pick_languages(word)
+    proxies = _pick_proxies()
     try:
-        result = GoogleTranslator(source=source, target=target).translate(word)
+        result = GoogleTranslator(
+            source=source, target=target, proxies=proxies
+        ).translate(word)
     except Exception as exc:  # noqa: BLE001 - surface any failure in GoldenDict
         return (
             '<div style="color:#c00; font-family: sans-serif;">'
