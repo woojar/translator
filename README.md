@@ -66,6 +66,27 @@ GD_SRC=en GD_TGT=zh-CN .venv/bin/translator "hello"
 GD_SRC=auto GD_TGT=ja .venv/bin/translator "hello"
 ```
 
+## Using a proxy
+
+If the translation endpoint is only reachable through a proxy, set one of the
+following environment variables. `GD_PROXY` takes precedence and is applied to
+both HTTP and HTTPS; otherwise the standard `HTTP_PROXY` / `HTTPS_PROXY`
+variables are used.
+
+```bash
+# single proxy for both protocols
+GD_PROXY=http://127.0.0.1:7890 .venv/bin/translator "hello"
+
+# standard proxy variables
+HTTPS_PROXY=http://127.0.0.1:7890 .venv/bin/translator "hello"
+```
+
+In a GoldenDict command line, prefix with `env` like the language example:
+
+```
+env GD_PROXY=http://127.0.0.1:7890 /absolute/path/to/translator/.venv/bin/translator "%GDWORD%"
+```
+
 ## Using it in GoldenDict
 
 1. Open GoldenDict and go to **Edit → Dictionaries… → Programs** tab.
