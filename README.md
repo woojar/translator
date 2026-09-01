@@ -1,9 +1,7 @@
 # translator
 
-A small command-line translator, built on
-[deep-translator](https://pypi.org/project/deep-translator/), designed to be
-used as an external **program dictionary** in
-[GoldenDict](http://goldendict.org/).
+A small command-line translator designed to be used as an external **program
+dictionary** in [GoldenDict](http://goldendict.org/).
 
 When you look up a word in GoldenDict, it runs this script with the word and
 renders the returned HTML inline alongside your other dictionaries.
@@ -15,7 +13,27 @@ renders the returned HTML inline alongside your other dictionaries.
 - Output is minimal, readable HTML showing the source/target languages, the
   original word, and the translation.
 
-Requires network access (uses deep-translator's free Google endpoint).
+Requires network access (uses free, unauthenticated translation endpoints).
+
+## Reliability
+
+The free endpoints are rate-limited per IP address, which is why a naive
+lookup fails intermittently — especially behind a corporate proxy where many
+users share one egress address. This tool works around that:
+
+- **Disk cache** — a successful lookup is stored in SQLite, so repeat lookups
+  cost no network traffic at all. This alone removes most failures.
+- **Provider fallback** — several back ends are tried in order until one
+  answers: `google-m` (Google's lightweight mobile page), `google-json`
+  (`translate.googleapis.com`), then `mymemory` (an independent service). A
+  `deep-translator` back end is also available but not enabled by default.
+- **Bounded time** — every request has a connect/read timeout, and the whole
+  lookup has a deadline, so a lookup can never hang GoldenDict.
+- **HTTP 429 fails over immediately** instead of backing off against an
+  endpoint that is already refusing us. Only genuinely transient errors
+  (connection resets, 5xx) are retried.
+- **Never crashes** — any failure, including a broken pipe or a changed page
+  layout upstream, is rendered as an HTML message instead of a traceback.
 
 ## Installation
 
@@ -27,7 +45,8 @@ uv sync
 ```
 
 This creates a virtual environment in `.venv/` and installs the `translator`
-console script into `.venv/bin/translator`.
+console script (`.venv/bin/translator`, or `.venv\Scripts\translator.exe` on
+Windows).
 
 ## Command-line usage
 
@@ -51,19 +70,36 @@ The output is HTML. To see plain text on the terminal you can strip the tags:
 .venv/bin/translator "apple" | sed -E 's/<[^>]+>//g'
 ```
 
-## Choosing languages
+## Configuration
 
-By default the direction is picked automatically (see *Behaviour*). To force a
-specific source/target, set the `GD_SRC` and `GD_TGT` environment variables.
-Use language codes accepted by Google Translate, or `auto` for automatic source
-detection.
+All settings are environment variables, so they can be set inline in the
+GoldenDict command line.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `GD_SRC` | `auto` | Source language code. |
+| `GD_TGT` | `en` / `zh-CN` | Target language code (see *Behaviour*). |
+| `GD_PROVIDERS` | `google-m,google-json,mymemory` | Comma-separated back ends to try, in order. Also available: `deep-translator`. |
+| `GD_TIMEOUT` | `5` | Read timeout per request, in seconds. |
+| `GD_DEADLINE` | `12` | Budget for the whole lookup, in seconds. |
+| `GD_PROXY` | – | Proxy for both http and https; overrides `HTTP_PROXY` / `HTTPS_PROXY`. |
+| `GD_NO_CACHE` | – | Set to `1` to disable the cache. |
+| `GD_CACHE_TTL` | `2592000` | Cache entry lifetime in seconds; `0` never expires. |
+| `GD_CACHE_DIR` | platform cache dir | Where to keep `translations.sqlite3`. |
+| `GD_DEBUG` | – | Set to `1` to show which provider answered, how long it took, and why others failed. |
+
+Language codes are the ones Google Translate accepts; use `auto` for automatic
+source detection.
 
 ```bash
 # force English -> Chinese
 GD_SRC=en GD_TGT=zh-CN .venv/bin/translator "hello"
 
 # auto-detect source, translate to Japanese
-GD_SRC=auto GD_TGT=ja .venv/bin/translator "hello"
+GD_TGT=ja .venv/bin/translator "hello"
+
+# diagnose a flaky lookup
+GD_DEBUG=1 GD_NO_CACHE=1 .venv/bin/translator "hello"
 ```
 
 ## Using a proxy
@@ -112,5 +148,14 @@ env GD_PROXY=http://127.0.0.1:7890 /absolute/path/to/translator/.venv/bin/transl
 Notes:
 - `%GDWORD%` is the placeholder GoldenDict replaces with the looked-up word.
 - Replace `/absolute/path/to/translator` with the real path to this project.
-- Because it depends on an online service, an occasional transient server
-  error can occur; simply look the word up again.
+- On Windows, point GoldenDict at `.venv\Scripts\translator.exe` (not
+  `pythonw.exe`) so stdout exists.
+
+## Tests
+
+```bash
+uv sync --all-groups
+uv run pytest
+```
+
+The test suite stubs out all HTTP traffic, so it runs offline.
